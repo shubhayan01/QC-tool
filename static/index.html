@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QC Dashboard</title>
+  <meta name="description" content="AI-assisted website quality-control dashboard. Runs a 77-point QC audit on any URL or design screenshot using the Groq API." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">✅</span>
+      <div>
+        <h1>QC Dashboard</h1>
+        <p class="tag">77-point website quality control · powered by Groq AI</p>
+      </div>
+    </div>
+    <a class="ghost-btn" href="https://console.groq.com/keys" target="_blank" rel="noopener">Get a Groq key ↗</a>
+  </header>
+
+  <main class="wrap">
+    <!-- API KEY (frontend only) -->
+    <section class="card key-card">
+      <div class="key-row">
+        <div class="field grow">
+          <label for="apiKey">Groq API key <span class="muted">(stored only in this browser — sent per request, never saved on the server)</span></label>
+          <div class="key-input">
+            <input id="apiKey" type="password" placeholder="gsk_..." autocomplete="off" spellcheck="false" />
+            <button id="toggleKey" class="icon-btn" type="button" title="Show / hide">👁</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="model">Model</label>
+          <input id="model" list="modelList" placeholder="llama-3.3-70b-versatile" spellcheck="false" />
+          <datalist id="modelList"></datalist>
+        </div>
+        <button id="loadModels" class="secondary-btn" type="button">Fetch models</button>
+      </div>
+      <div id="keyMsg" class="inline-msg" hidden></div>
+    </section>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" data-tab="url">🔗 Scan a URL</button>
+      <button class="tab" data-tab="image">🖼 Scan images / design</button>
+    </div>
+
+    <!-- URL PANEL -->
+    <section class="card panel" id="panel-url">
+      <div class="run-row">
+        <div class="field grow">
+          <label for="url">Page URL</label>
+          <input id="url" type="text" placeholder="example.com/page" spellcheck="false" />
+        </div>
+        <button id="runUrl" class="primary-btn" type="button">Run QC</button>
+      </div>
+      <p class="hint">Fetches the page and runs every automated checkpoint (broken links, images, SEO, headings, HTTPS, forms…). With a Groq key, the AI also judges copy, headings, CTAs, contact details and writes an expert verdict.</p>
+    </section>
+
+    <!-- IMAGE PANEL -->
+    <section class="card panel" id="panel-image" hidden>
+      <div class="field">
+        <label>Design / screenshot images</label>
+        <div id="dropzone" class="dropzone">
+          <input id="fileInput" type="file" accept="image/*" multiple hidden />
+          <p>Drag & drop images here, <button type="button" id="browseBtn" class="linklike">browse</button>, or paste an image URL below.</p>
+        </div>
+        <div class="url-add">
+          <input id="imgUrl" type="text" placeholder="https://…/screenshot.png" spellcheck="false" />
+          <button id="addImgUrl" class="secondary-btn" type="button">Add URL</button>
+        </div>
+        <div id="thumbs" class="thumbs"></div>
+      </div>
+      <div class="field">
+        <label for="imgContext">Context for the reviewer <span class="muted">(optional)</span></label>
+        <input id="imgContext" type="text" placeholder="e.g. Homepage hero, should match the approved Figma" />
+      </div>
+      <div class="run-row end">
+        <button id="runImg" class="primary-btn" type="button">Run visual QC</button>
+      </div>
+      <p class="hint">Uses a Groq vision model to review layout, alignment, spacing, typography, contrast, overlap and CTAs from what it can actually see in the image(s).</p>
+    </section>
+
+    <!-- STATUS -->
+    <div id="loader" class="loader" hidden>
+      <div class="spinner"></div>
+      <span id="loaderText">Running QC…</span>
+    </div>
+    <div id="errorBox" class="error-box" hidden></div>
+
+    <!-- RESULTS -->
+    <section id="results" class="results" hidden></section>
+  </main>
+
+  <footer class="foot">
+    <span>Fetch-based QC — nothing on the scanned page is executed.</span>
+    <button id="printBtn" class="linklike" type="button">Print / Save PDF</button>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
