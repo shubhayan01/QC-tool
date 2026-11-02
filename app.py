@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-QC Dashboard -- Flask backend.
+Justwords QC tool -- Flask backend.
 
 Endpoints
   GET  /                -> the dashboard (static frontend)
   GET  /api/health      -> liveness probe
-  POST /api/models      -> { apiKey } -> models the key can access
-  POST /api/scan        -> { url, apiKey, model } -> full 77-point QC + AI verdicts
-  POST /api/scan-image  -> { images[], apiKey, model, context } -> visual QC
+  POST /api/scan        -> { url } -> full 77-point QC + AI verdict
+  POST /api/scan-image  -> { images[], context } -> AI assessment of image metrics
 
-The Groq API key is accepted per-request from the frontend only. It is never
-persisted, logged, or read from the server environment.
+The AI key and model are configured on the server (env vars, with a built-in
+default) so the tool works out of the box with no setup in the UI.
 """
 
 import os
@@ -18,14 +17,28 @@ import os
 from flask import Flask, jsonify, request, send_from_directory
 
 import qc_core
-import groq_judge
+import ai_engine
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB
 
-MAX_CONTENT = 25 * 1024 * 1024  # 25 MB (room for a few screenshots)
-app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT
+# ---- AI configuration (server-side; no key is ever committed) ----
+# Order of precedence: GROQ_API_KEY env var (set this on Render) -> a local
+# gitignored file next to this app ("groq_key.txt") for local development.
+def _load_key():
+    env = os.environ.get("GROQ_API_KEY", "").strip()
+    if env:
+        return env
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "groq_key.txt")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
 
-# status -> coarse bucket used for scoring/colour
+AI_KEY = _load_key()
+AI_MODEL = os.environ.get("QC_MODEL", "openai/gpt-oss-120b")
+
 BUCKET = {
     "Pass": "pass", "Fail": "fail", "Warning": "warn",
     "Info": "info", "Manual": "manual", "N/A": "na",
@@ -33,7 +46,6 @@ BUCKET = {
 
 
 def merge_ai_into_rows(scan, ai):
-    """Overlay Groq verdicts onto the scanned rows and return assembled checkpoint list."""
     meta = {m["sr"]: m for m in qc_core.checklist_meta()}
     ai_cps = (ai or {}).get("checkpoints", {}) if ai else {}
     rows_out = []
@@ -49,7 +61,7 @@ def merge_ai_into_rows(scan, ai):
             ai_status = (ai_entry.get("status") or "").strip().title() or None
             ai_finding = ai_entry.get("finding")
             if ai_status in ("Pass", "Fail", "Warning"):
-                status = ai_status  # AI verdict supersedes the "Info/Manual" placeholder
+                status = ai_status
         rows_out.append({
             "sr": sr,
             "module": meta[sr]["module"],
@@ -68,17 +80,9 @@ def merge_ai_into_rows(scan, ai):
 
 def summarise(rows):
     counts = {"pass": 0, "fail": 0, "warn": 0, "info": 0, "manual": 0, "na": 0}
-    modules = {}
     for r in rows:
         counts[r["bucket"]] = counts.get(r["bucket"], 0) + 1
-        m = modules.setdefault(r["module"], {"pass": 0, "fail": 0, "warn": 0,
-                                             "info": 0, "manual": 0, "na": 0, "total": 0})
-        m[r["bucket"]] = m.get(r["bucket"], 0) + 1
-        m["total"] += 1
-    scored = counts["pass"] + counts["fail"] + counts["warn"]
-    # Warnings count as half credit.
-    health = round(100 * (counts["pass"] + 0.5 * counts["warn"]) / scored) if scored else 0
-    return {"counts": counts, "modules": modules, "health": health, "auto_scored": scored}
+    return {"counts": counts}
 
 
 @app.route("/")
@@ -91,46 +95,29 @@ def health():
     return jsonify({"ok": True})
 
 
-@app.post("/api/models")
-def api_models():
-    data = request.get_json(force=True, silent=True) or {}
-    api_key = (data.get("apiKey") or "").strip()
-    if not api_key:
-        return jsonify({"error": "Paste your Groq API key first."}), 400
-    try:
-        models = groq_judge.list_models(api_key)
-    except groq_judge.GroqError as e:
-        return jsonify({"error": str(e)}), 400
-    return jsonify({"models": models,
-                    "default_text": groq_judge.DEFAULT_TEXT_MODEL,
-                    "default_vision": groq_judge.DEFAULT_VISION_MODEL})
-
-
 @app.post("/api/scan")
 def api_scan():
     data = request.get_json(force=True, silent=True) or {}
     url = (data.get("url") or "").strip()
-    api_key = (data.get("apiKey") or "").strip()
-    model = (data.get("model") or "").strip() or None
     if not url:
         return jsonify({"error": "Enter a URL to QC."}), 400
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
     scan = qc_core.scan_url(url)
-    ai = None
-    ai_error = None
     if scan.get("error"):
-        return jsonify({"error": f"Could not fetch the page: {scan['error']}",
-                        "url": url}), 502
-    if api_key:
+        return jsonify({"error": f"Could not fetch the page: {scan['error']}", "url": url}), 502
+
+    ai, ai_error = None, None
+    if not AI_KEY:
+        ai_error = "AI key not configured on the server (set the GROQ_API_KEY environment variable)."
+    else:
         try:
-            ai = groq_judge.judge_content(scan, api_key, model)
-        except groq_judge.GroqError as e:
+            ai = ai_engine.judge_content(scan, AI_KEY, AI_MODEL)
+        except ai_engine.AIError as e:
             ai_error = str(e)
 
     rows = merge_ai_into_rows(scan, ai)
-    summary = summarise(rows)
     return jsonify({
         "type": "url",
         "url": scan.get("url"),
@@ -140,7 +127,7 @@ def api_scan():
         "page_kb": scan.get("page_kb"),
         "wordpress": scan.get("wordpress"),
         "rows": rows,
-        "summary": summary,
+        "summary": summarise(rows),
         "ai": ai,
         "ai_error": ai_error,
         "raw": {
@@ -158,18 +145,16 @@ def api_scan():
 def api_scan_image():
     data = request.get_json(force=True, silent=True) or {}
     images = data.get("images") or []
-    api_key = (data.get("apiKey") or "").strip()
-    model = (data.get("model") or "").strip() or None
     context = (data.get("context") or "").strip()
-    if not api_key:
-        return jsonify({"error": "A Groq API key is required for image QC."}), 400
     if not images:
-        return jsonify({"error": "Add at least one image (upload or URL)."}), 400
+        return jsonify({"error": "Add at least one image."}), 400
+    if not AI_KEY:
+        return jsonify({"error": "AI key not configured on the server (set GROQ_API_KEY)."}), 400
     try:
-        result = groq_judge.judge_images(images, api_key, model, context)
-    except groq_judge.GroqError as e:
+        result = ai_engine.judge_images(images, AI_KEY, AI_MODEL, context)
+    except ai_engine.AIError as e:
         return jsonify({"error": str(e)}), 400
-    return jsonify({"type": "image", "ai": result, "image_count": len(images[:5])})
+    return jsonify({"type": "image", "ai": result, "image_count": len(images)})
 
 
 if __name__ == "__main__":

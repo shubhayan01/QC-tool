@@ -3,48 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>QC Dashboard</title>
-  <meta name="description" content="AI-assisted website quality-control dashboard. Runs a 77-point QC audit on any URL or design screenshot using the Groq API." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>" />
+  <title>Justwords QC tool</title>
+  <meta name="description" content="Justwords QC tool — a 77-point website quality-control audit for any URL or image, with an AI expert verdict." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111'/><text x='50' y='72' font-size='60' text-anchor='middle' fill='%23ffd21e' font-family='Arial' font-weight='bold'>QC</text></svg>" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">✅</span>
+      <span class="logo">QC</span>
       <div>
-        <h1>QC Dashboard</h1>
-        <p class="tag">77-point website quality control · powered by Groq AI</p>
+        <h1>Justwords <span class="hl">QC tool</span></h1>
+        <p class="tag">77-point website quality control · instant AI verdict</p>
       </div>
     </div>
-    <a class="ghost-btn" href="https://console.groq.com/keys" target="_blank" rel="noopener">Get a Groq key ↗</a>
   </header>
 
   <main class="wrap">
-    <!-- API KEY (frontend only) -->
-    <section class="card key-card">
-      <div class="key-row">
-        <div class="field grow">
-          <label for="apiKey">Groq API key <span class="muted">(stored only in this browser — sent per request, never saved on the server)</span></label>
-          <div class="key-input">
-            <input id="apiKey" type="password" placeholder="gsk_..." autocomplete="off" spellcheck="false" />
-            <button id="toggleKey" class="icon-btn" type="button" title="Show / hide">👁</button>
-          </div>
-        </div>
-        <div class="field">
-          <label for="model">Model</label>
-          <input id="model" list="modelList" placeholder="llama-3.3-70b-versatile" spellcheck="false" />
-          <datalist id="modelList"></datalist>
-        </div>
-        <button id="loadModels" class="secondary-btn" type="button">Fetch models</button>
-      </div>
-      <div id="keyMsg" class="inline-msg" hidden></div>
-    </section>
-
     <!-- TABS -->
     <div class="tabs">
       <button class="tab active" data-tab="url">🔗 Scan a URL</button>
-      <button class="tab" data-tab="image">🖼 Scan images / design</button>
+      <button class="tab" data-tab="image">🖼 Scan images</button>
     </div>
 
     <!-- URL PANEL -->
@@ -56,36 +35,36 @@
         </div>
         <button id="runUrl" class="primary-btn" type="button">Run QC</button>
       </div>
-      <p class="hint">Fetches the page and runs every automated checkpoint (broken links, images, SEO, headings, HTTPS, forms…). With a Groq key, the AI also judges copy, headings, CTAs, contact details and writes an expert verdict.</p>
+      <p class="hint">Fetches the page and runs every automated checkpoint — broken links, images &amp; alt text, headings, SEO/meta, HTTPS, forms, responsive signals. An AI auditor then judges the copy, headings, CTAs and contact details and writes an expert verdict.</p>
     </section>
 
     <!-- IMAGE PANEL -->
     <section class="card panel" id="panel-image" hidden>
       <div class="field">
-        <label>Design / screenshot images</label>
+        <label>Images to QC</label>
         <div id="dropzone" class="dropzone">
           <input id="fileInput" type="file" accept="image/*" multiple hidden />
-          <p>Drag & drop images here, <button type="button" id="browseBtn" class="linklike">browse</button>, or paste an image URL below.</p>
+          <p>Drag &amp; drop images here, <button type="button" id="browseBtn" class="linklike">browse</button>, paste, or add an image URL below.</p>
         </div>
         <div class="url-add">
-          <input id="imgUrl" type="text" placeholder="https://…/screenshot.png" spellcheck="false" />
+          <input id="imgUrl" type="text" placeholder="https://…/image.png" spellcheck="false" />
           <button id="addImgUrl" class="secondary-btn" type="button">Add URL</button>
         </div>
         <div id="thumbs" class="thumbs"></div>
       </div>
       <div class="field">
-        <label for="imgContext">Context for the reviewer <span class="muted">(optional)</span></label>
-        <input id="imgContext" type="text" placeholder="e.g. Homepage hero, should match the approved Figma" />
+        <label for="imgContext">Where will these be used? <span class="muted">(optional — helps the audit)</span></label>
+        <input id="imgContext" type="text" placeholder="e.g. Homepage hero banner / blog thumbnail" />
       </div>
       <div class="run-row end">
-        <button id="runImg" class="primary-btn" type="button">Run visual QC</button>
+        <button id="runImg" class="primary-btn" type="button">Run image QC</button>
       </div>
-      <p class="hint">Uses a Groq vision model to review layout, alignment, spacing, typography, contrast, overlap and CTAs from what it can actually see in the image(s).</p>
+      <p class="hint">Measures each image (dimensions, file weight, format, aspect ratio) and an AI reviewer assesses fitness for web use — resolution, page-weight, format and distortion risk.</p>
     </section>
 
     <!-- STATUS -->
     <div id="loader" class="loader" hidden>
-      <div class="spinner"></div>
+      <span class="loadbar"><span></span></span>
       <span id="loaderText">Running QC…</span>
     </div>
     <div id="errorBox" class="error-box" hidden></div>

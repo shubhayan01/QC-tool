@@ -9,3 +9,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.4"
+      # Set this in the Render dashboard (Environment tab). Never commit the key.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: QC_MODEL
+        value: "openai/gpt-oss-120b"

@@ -1,18 +1,19 @@
-# QC Dashboard
+# Justwords QC tool
 
-An AI-assisted website **quality-control dashboard**. Paste a URL (or drop in
-design screenshots), and it runs the full **77-point QC checklist** used by the
-`wordpress-qc` workflow, then layers a **Groq**-powered expert verdict on top.
+An AI-assisted website **quality-control dashboard**. Paste a URL (or add
+images), and it runs the full **77-point QC checklist** and layers an AI expert
+verdict on top — no setup, no keys to enter.
 
 - **Fetch-based** — the scanned page's HTML and a few stylesheets are downloaded
   and parsed. Nothing on the page is ever executed.
-- **Your Groq API key stays in your browser.** It is typed into the frontend,
-  stored only in `localStorage`, and forwarded per request. The server never
-  stores it, logs it, or reads it from the environment.
+- **No key in the UI** — the AI key and model live on the server (an environment
+  variable), so end users just open the page and scan.
+- **Clickable status filters** — click *Fail / Warning / Pass / Info / Manual /
+  N/A* to show only those checkpoints.
 
 ## What it checks
 
-Every checkpoint from `.claude/skills/wordpress-qc/references/checklist.md`:
+Every checkpoint from the QC checklist:
 
 | Area | Examples |
 |------|----------|
@@ -33,41 +34,38 @@ are marked **Manual** with guidance. The **AI layer** judges the subjective text
 rows (headings, spelling/grammar, CTA/contact correctness, title, URL) and writes
 an overall verdict with a content score, top issues, and strengths.
 
-**Image / design QC** sends your screenshot(s) to a Groq **vision** model for a
-visual review of layout, alignment, spacing, typography, contrast, overlap,
-imagery and CTA visibility.
+**Image QC** measures each image you add (dimensions, file weight, format, aspect
+ratio) in the browser, then the AI reviewer assesses fitness for web use —
+resolution, page-weight, format suitability and distortion risk.
 
 ## Run locally
 
 ```bash
 pip install -r requirements.txt
+# provide your key either way:
+export GROQ_API_KEY=gsk_...        # Windows: set GROQ_API_KEY=gsk_...
+# or create a (gitignored) groq_key.txt next to app.py containing the key
 python app.py
 # open http://localhost:5000
 ```
-
-Then paste your Groq API key (get one at https://console.groq.com/keys),
-optionally click **Fetch models** to pick a model, and run a scan.
 
 ## Deploy on Render
 
 This repo includes a `render.yaml` blueprint.
 
-1. Push to GitHub (this repo).
-2. In Render: **New → Blueprint**, point it at the repo. Render reads
-   `render.yaml` and creates a free web service running
-   `gunicorn app:app`.
-3. No environment variables are required — the Groq key is supplied by each user
-   in the browser.
-
-Or deploy manually: **New → Web Service**, Build `pip install -r requirements.txt`,
-Start `gunicorn app:app --bind 0.0.0.0:$PORT`.
+1. Push to GitHub.
+2. In Render: **New → Blueprint**, point it at the repo. Render runs
+   `gunicorn app:app` on the free plan.
+3. In the service's **Environment** tab, set `GROQ_API_KEY` to your key (the
+   blueprint already declares it with `sync: false`, so Render will prompt for
+   it). `QC_MODEL` defaults to `openai/gpt-oss-120b`.
 
 ## Project layout
 
 ```
-app.py            Flask app: routes, scoring, AI merge
-qc_core.py        Fetch-based 77-point scanner (ported from the skill)
-groq_judge.py     Groq calls: model list, content verdict, vision QC
+app.py            Flask app: routes, scoring, AI merge, server-side key/model
+qc_core.py        Fetch-based 77-point scanner
+ai_engine.py      AI calls: content verdict + image assessment
 static/           Frontend (index.html, style.css, app.js)
 render.yaml       Render blueprint
 requirements.txt  Python deps
@@ -77,9 +75,5 @@ requirements.txt  Python deps
 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
-| POST | `/api/models` | `{apiKey}` | model ids the key can use |
-| POST | `/api/scan` | `{url, apiKey?, model?}` | 77 checkpoints + AI verdict |
-| POST | `/api/scan-image` | `{images[], apiKey, model?, context?}` | visual QC verdict |
-
-The Groq key is optional for `/api/scan` (you still get the full automated audit);
-it is required for AI verdicts and all image QC.
+| POST | `/api/scan` | `{url}` | 77 checkpoints + AI verdict |
+| POST | `/api/scan-image` | `{images[], context?}` | AI image assessment |
